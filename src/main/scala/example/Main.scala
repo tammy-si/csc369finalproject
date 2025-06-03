@@ -8,6 +8,7 @@ import org.apache.spark.rdd._
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
 import scala.collection._
+import org.apache.spark.rdd.RDD
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -48,6 +49,74 @@ object Main {
     sc.parallelize(Seq(f"Model accuracy: ${acc * 100}%.2f%%"))
       .coalesce(1)
       .saveAsTextFile(outputPath)
+
+
+    /* performance stuff */
+    val classes1 = test.map(_._2).distinct().collect().sorted
+
+    val classMetrics = classes1.map { c =>
+      val counts = test.map { case (features, label) =>
+          val pred = predict(features, filteredFeatures, model)
+          if (label == c && pred == c) ("TP", 1)
+          else if (label != c && pred == c) ("FP", 1)
+          else if (label == c && pred != c) ("FN", 1)
+          else ("TN", 1)
+        }.reduceByKey((a, b) => a + b)
+        .collectAsMap()
+
+      val TP = counts.getOrElse("TP", 0).toDouble
+      val FP = counts.getOrElse("FP", 0).toDouble
+      val FN = counts.getOrElse("FN", 0).toDouble
+
+      val precision = if (TP + FP > 0) TP / (TP + FP) else 0.0
+      val recall = if (TP + FN > 0) TP / (TP + FN) else 0.0
+      val f1 = if (precision + recall > 0) 2 * (precision * recall) / (precision + recall) else 0.0
+
+      (c, precision, recall, f1)
+    }
+
+    val metricsOutput = collection.mutable.ArrayBuffer[String]()
+
+    //println(f"\nPer-Class Metrics:")
+    metricsOutput += "\nPer-Class Metrics:"
+
+    classMetrics.foreach { case (c, prec, rec, f1) =>
+      metricsOutput += f"Class $c: Precision = $prec%.4f, Recall = $rec%.4f, F1 = $f1%.4f"
+    }
+    //precision, recall, f1
+    //and then confusion matrix (3x3)
+
+    val confusionPairs = test.map { case (features, label) =>
+      val prediction = predict(features, filteredFeatures, model)
+      ((label, prediction), 1)
+    }
+
+    val confusionMatrix = confusionPairs
+      .reduceByKey((a, b) => a + b)
+      .collect()
+      .toMap
+
+    val classes = test.map(_._2).distinct().collect().sorted
+
+    metricsOutput += "\nConfusion Matrix:"
+    metricsOutput += f"             ${classes.map(c => f"Pred $c%8s").mkString}"
+
+    //println("\nConfusion Matrix:")
+    metricsOutput += f"             ${classes.map(c => f"Pred $c%8s").mkString}"
+    for (actual <- classes) {
+      val row = new StringBuilder(f"\nActual $actual%5d")
+
+      //print(f"\nActual $actual%5d")
+      for (predicted <- classes) {
+        val count = confusionMatrix.getOrElse((actual, predicted), 0)
+        row.append(f"$count%12d")
+      }
+      metricsOutput += row.toString()
+    }
+    //println()
+    sc.parallelize(metricsOutput)
+      .coalesce(1)
+      .saveAsTextFile(outputPath + "/metrics")
   }
 
   def trainTestSplit[T](data: RDD[T], trainFraction: Double = 0.8): (RDD[T], RDD[T]) = {
