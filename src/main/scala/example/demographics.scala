@@ -16,6 +16,10 @@ import org.apache.spark.sql.functions.{avg, col, round, desc, first}
 
 object demographics {
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org").setLevel(Level.ERROR)
+    Logger.getLogger("akka").setLevel(Level.ERROR)
+    Logger.getRootLogger.setLevel(Level.ERROR)
+
     val spark = SparkSession.builder()
       .appName("FinalProject")
       .master("local[*]")
@@ -82,6 +86,6 @@ object demographics {
       .orderBy("DiabetesClass")
 
     sexAndHealthcareRates.show()
-
+    spark.stop()
   }
 }
