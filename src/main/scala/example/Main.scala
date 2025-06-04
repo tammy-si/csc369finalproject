@@ -19,7 +19,6 @@ object Main {
     val sc = spark.sparkContext
     val inputPath = args(0)
     val outputPath = args(1)
-
     val rawdiabetesDF = spark.read
       .option("header", "true")
       .option("inferSchema", "true")
@@ -29,7 +28,6 @@ object Main {
       "GenHlth", "HighBP", "BMI", "HighChol", "Age",
       "HeartDiseaseorAttack", "Educatoin", "MentHlth", "Smoker", "Sex", "Veggies"
     )
-
     // Get feature indices
     val featureCols = rawdiabetesDF.columns.filter(_ != "Diabetes")
     val selectedFeatures = allFeatures.map(name => featureCols.indexOf(name))
@@ -124,7 +122,6 @@ object Main {
     (splits(0), splits(1))
   }
 
-
   def gaussianLogProb(x: Double, mean: Double, variance: Double): Double = {
     val eps = 1e-6
     val varAdj = if (variance < eps) eps else variance
@@ -135,9 +132,7 @@ object Main {
                        train: RDD[(Array[Double], Int)],
                        featureIndices: Seq[Int]
                      ): (Map[Int, Map[Int, (Double, Double)]], Map[Int, Double]) = {
-
     val classGrouped = train.groupBy(_._2)
-
     val featureStats = classGrouped.mapValues { samples =>
       val points = samples.map(_._1)
       featureIndices.map { i =>
@@ -147,11 +142,9 @@ object Main {
         (mean, variance)
       }.zipWithIndex.map { case ((mean, variance), i) => (i, (mean, variance)) }.toMap
     }.collect().toMap
-
     val classCounts = train.map { case (_, label) => (label, 1) }.reduceByKey(_ + _).collectAsMap()
     val total = classCounts.values.sum.toDouble
     val classPriors = classCounts.map { case (label, count) => (label, math.log(count / total)) }.toMap
-
     (featureStats, classPriors)
   }
 
@@ -161,7 +154,6 @@ object Main {
                model: (Map[Int, Map[Int, (Double, Double)]], Map[Int, Double])
              ): Int = {
     val (featureStats, classPriors) = model
-
     classPriors.map { case (label, priorLogProb) =>
       val likelihood = featureIndices.indices.map { i =>
         val (mean, variance) = featureStats(label)(i)

@@ -71,5 +71,17 @@ object demographics {
       .agg(first("Education").alias("Most_Common_Education_Level"))
 
     educationModes.show()
+
+    val sexAndHealthcareRates = rawdiabetesDF
+      .withColumn("DiabetesClass", col("Diabetes").cast("int"))
+      .groupBy("DiabetesClass")
+      .agg(
+        round(avg(col("Sex")) * 100, 1).alias("Male_Percent"),
+        round(avg(col("AnyHealthcare")) * 100, 1).alias("Healthcare_Access_Percent")
+      )
+      .orderBy("DiabetesClass")
+
+    sexAndHealthcareRates.show()
+
   }
 }
